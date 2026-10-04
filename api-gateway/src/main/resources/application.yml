@@ -1,10 +1,2 @@
-server:
-  port: 8080
-spring:
-  application:
-    name: api-gateway
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
+jwt:
+  secret: "change-me-to-a-strong-secret"
