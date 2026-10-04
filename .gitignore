@@ -1,0 +1,28 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+**/target/
+
+# Maven Wrapper
+.mvn/wrapper/
+mvnw
+mvnw.cmd
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
