@@ -3,12 +3,22 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.0</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
     <groupId>com.storefront</groupId>
+
     <artifactId>storefront-services</artifactId>
+
     <version>0.0.1-SNAPSHOT</version>
+
+
     <packaging>pom</packaging>
 
-    <name>storefront-services</name>
     <description>Multi-module Maven project for Storefront Services</description>
 
     <properties>
@@ -37,8 +47,16 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!-- Common Events -->
+            <dependency>
+                <groupId>com.storefront</groupId>
+                <artifactId>common-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
+
 
     <modules>
         <module>common-events</module>
@@ -51,12 +69,5 @@
     </modules>
 
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot.version}</version>
-            </plugin>
-        </plugins>
-    </build>
+            </build>
 </project>

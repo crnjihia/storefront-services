@@ -49,7 +49,7 @@ class OrderServiceMessagingIntegrationTest {
                 payload
         );
         // Send to the topic – key can be orderId
-        kafkaTemplate.send("order.created", envelope.getOrderId().toString(), envelope);
+        kafkaTemplate.send("order.created", envelope.orderId().toString(), envelope);
         // Allow some time for processing and retries (max backoff ~8s, 3 attempts)
         Thread.sleep(15000L);
         // Verify that a DLT record was persisted
