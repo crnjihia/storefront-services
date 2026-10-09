@@ -1,241 +1,367 @@
 # Storefront Services
 
-![Java 21](https://img.shields.io/badge/Java-21-blue?logo=java) ![Spring Boot 3.3](https://img.shields.io/badge/Spring%20Boot-3.3-green?logo=spring) ![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.5-orange?logo=apachekafka) ![Docker](https://img.shields.io/badge/Docker-Compose-5272B9?logo=docker) ![CI](https://github.com/yourusername/storefront-services/actions/workflows/ci.yml/badge.svg)
+[![Java 21](https://img.shields.io/badge/Java-21-blue.svg?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 3.3](https://img.shields.io/badge/Spring%20Boot-3.3.0-brightgreen.svg?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Cloud 2023.0](https://img.shields.io/badge/Spring%20Cloud-2023.0.0-green.svg)](https://spring.io/projects/spring-cloud)
+[![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft%20Mode-231F20.svg?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Production-grade event-driven microservices architecture inspired by African e-commerce platforms (Jumia, Copia). Built with Java 21, Spring Boot 3, Apache Kafka, Spring Cloud Gateway with Resilience4j circuit breakers, and an orchestrated Saga checkout flow with compensating transactions.**
 
 ---
 
-## Screenshots
+## Table of Contents
 
-![Architecture Diagram](docs/images/architecture.png "System Architecture")
-
-![Kafka UI](docs/images/kafka-ui.png "Kafka UI")
-
-![Swagger UI](docs/images/swagger-ui.png "Aggregated Swagger UI")
-
----
-
-## Overview
-
-**Storefront Services** is a Kenyan‑market e‑commerce backend inspired by Jumia. It demonstrates a realistic microservice architecture with:
-- **M‑Pesa** and **card** payment simulations (including a Daraja‑style STK push).
-- **County‑aware** delivery tracking using Kenyan counties.
-- Currency handling in **KES** (Kenyan Shilling) with `BigDecimal` precision.
-- Full **Saga orchestration** for checkout, guaranteeing consistency across stock reservation, payment, and order confirmation.
+- [Architectural Overview](#architectural-overview)
+- [System Architecture Diagram](#system-architecture-diagram)
+- [Microservices Topology](#microservices-topology)
+- [Distributed Saga Pattern](#distributed-saga-pattern)
+- [Kafka Event Catalogue](#kafka-event-catalogue)
+- [Reliability & Resilience Patterns](#reliability--resilience-patterns)
+- [Quick Start & Setup Guide](#quick-start--setup-guide)
+- [Testing Guide & Verification](#testing-guide--verification)
+- [cURL End-to-End Walkthrough](#curl-end-to-end-walkthrough)
+- [Project Structure](#project-structure)
+- [CI/CD & Code Quality](#cicd--code-quality)
+- [Contributing & License](#contributing--license)
 
 ---
 
-## Architecture
+## Architectural Overview
+
+**Storefront Services** demonstrates modern distributed patterns designed for high-concurrency e-commerce operating in emerging markets:
+
+* **Saga Orchestrator with Compensating Transactions**: End-to-end checkout coordination across Catalog, Payment, and Notification services ensuring eventual consistency without distributed locks.
+* **Transactional Outbox Pattern**: Guarantees atomic DB state transitions and zero message loss by persisting events in relational tables before asynchronous Kafka dispatch.
+* **Idempotent Message Processing**: Dedicated `processed_events` tracking prevents duplicate event execution on Kafka rebalances and retries.
+* **Resilient API Gateway**: Single entry point with JWT validation, route-level Resilience4j Circuit Breakers (50% failure rate threshold, 10s open wait duration), and automatic HTTP 503 fallback routing.
+* **Kenyan Fintech & Logistics Integration**: Simulated Safaricom M-Pesa STK push (Daraja API simulation), card payments with refund capabilities, and county-aware delivery milestone tracking (Nairobi, Kiambu, Mombasa, Kisumu, Nakuru, Eldoret).
+
+---
+
+## System Architecture Diagram
 
 ```mermaid
-graph LR
-    G[API Gateway (8080)] --> U[User Service (8081)]
-    G --> C[Catalog Service (8082)]
-    G --> O[Order Service (8083)]
-    G --> P[Payment Service (8084)]
-    G --> N[Notification Service (8085)]
-    subgraph Kafka Cluster
-        K[(Kafka) ]
+graph TD
+    Client(["🌐 Client / Mobile App / Web App"]) -->|HTTP Requests| Gateway["🚪 API Gateway (Port 8080)<br/>• Spring Cloud Gateway<br/>• JWT Authentication Filter<br/>• Resilience4j Circuit Breakers"]
+
+    subgraph Microservices ["Microservices Layer (Internal Network)"]
+        Gateway -->|/api/users/**| UserService["👤 User Service (Port 8081)<br/>• User Profiles & Auth"]
+        Gateway -->|/api/products/**| CatalogService["📦 Catalog Service (Port 8082)<br/>• Stock Reservations & Inventory"]
+        Gateway -->|/api/orders/**| OrderService["🛒 Order Service (Port 8083)<br/>• Saga Coordinator<br/>• Outbox Publisher"]
+        Gateway -->|/api/payments/**| PaymentService["💳 Payment Service (Port 8084)<br/>• M-Pesa STK Push & Cards"]
+        Gateway -->|/api/deliveries/**| NotificationService["🔔 Notification Service (Port 8085)<br/>• County Delivery & Alerts"]
     end
-    K --> U
-    K --> C
-    K --> O
-    K --> P
-    K --> N
-    subgraph PostgreSQL
-        DB[(PostgreSQL 16)]
+
+    subgraph EventStream ["Event Bus (KRaft Mode)"]
+        Kafka[("⚡ Apache Kafka Cluster<br/>Topics: order.* | stock.* | payment.* | delivery.*")]
     end
-    U --> DB
-    C --> DB
-    O --> DB
-    P --> DB
-    N --> DB
+
+    subgraph DataLayer ["Data Isolation (Database-per-Service)"]
+        DB_User[("🗄️ user_db")]
+        DB_Catalog[("🗄️ catalog_db")]
+        DB_Order[("🗄️ order_db")]
+        DB_Payment[("🗄️ payment_db")]
+        DB_Notification[("🗄️ notification_db")]
+    end
+
+    UserService --- DB_User
+    CatalogService --- DB_Catalog
+    OrderService --- DB_Order
+    PaymentService --- DB_Payment
+    NotificationService --- DB_Notification
+
+    OrderService <-->|Publish / Consume| Kafka
+    CatalogService <-->|Publish / Consume| Kafka
+    PaymentService <-->|Publish / Consume| Kafka
+    NotificationService <-->|Publish / Consume| Kafka
 ```
 
 ---
 
-## Checkout Saga
+## Microservices Topology
+
+| Service | Port | Database | Primary Responsibility |
+| :--- | :---: | :--- | :--- |
+| **`api-gateway`** | `8080` | *None* | Central reverse proxy, JWT claims extraction, route-level circuit breakers, fallback responses. |
+| **`user-service`** | `8081` | `user_db` | User profiles, credential management, address book. |
+| **`catalog-service`** | `8082` | `catalog_db` | Inventory levels, atomic stock reservation, stock release on order cancellation. |
+| **`order-service`** | `8083` | `order_db` | Order lifecycle, Checkout Saga state engine, Transactional Outbox poller. |
+| **`payment-service`** | `8084` | `payment_db` | M-Pesa STK Push simulation, Card payments, idempotent payment capture and refunds. |
+| **`notification-service`** | `8085` | `notification_db` | Delivery milestones across Kenyan counties, SMS/Email dispatch simulation. |
+| **`common-events`** | *N/A* | *None* | Shared immutable event schemas (`EventEnvelope`, payload DTOs, topic constants). |
+
+---
+
+## Distributed Saga Pattern
+
+The checkout flow follows an orchestrated Saga coordinated by `OrderSagaOrchestrator` in `order-service`.
+
+### 1. Happy Path Sequence
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client (gateway)
-    participant Order as Order Service
-    participant Catalog as Catalog Service
-    participant Payment as Payment Service
-    participant Notification as Notification Service
+    autonumber
+    actor Customer as 👤 Customer
+    participant Gateway as 🚪 API Gateway
+    participant OrderSvc as 🛒 Order Service
+    participant Outbox as 📬 Outbox Publisher
+    participant Kafka as ⚡ Apache Kafka
+    participant CatalogSvc as 📦 Catalog Service
+    participant PaymentSvc as 💳 Payment Service
+    participant NotifSvc as 🔔 Notification Service
 
-    Client->>Order: POST /orders (order.created)
-    Order->>Catalog: stock.reserved
-    Catalog-->>Order: stock.reserved
-    Order->>Payment: payment.request
-    Payment-->>Order: payment.completed
-    Order->>Notification: order.confirmed (notify customer)
-    Notification->>Client: Email/SMS (simulated)
-    Note over Order: Happy Path
+    Customer->>Gateway: POST /api/orders (items, address, userId)
+    Gateway->>OrderSvc: Forward order request
+    OrderSvc->>OrderSvc: Save Order (status: PENDING)<br/>Save SagaState (step: STARTED)<br/>Save OutboxEvent (order.created)
+    OrderSvc-->>Gateway: HTTP 202 Accepted (orderId)
+    Gateway-->>Customer: Return orderId
 
-    alt Payment Failure
-        Payment-->>Order: payment.failed
-        Order->>Catalog: stock.released (compensation)
-        Order->>Notification: order.cancelled
-        Notification->>Client: Email/SMS (simulated)
+    Outbox->>Kafka: Publish order.created
+    Kafka->>CatalogSvc: Consume order.created
+    CatalogSvc->>CatalogSvc: Check & Reserve Stock
+    CatalogSvc->>Kafka: Publish stock.reserved
+
+    Kafka->>OrderSvc: Consume stock.reserved
+    OrderSvc->>OrderSvc: Transition Saga to STOCK_RESERVED<br/>Save OutboxEvent (payment.request)
+    Outbox->>Kafka: Publish payment.request
+
+    Kafka->>PaymentSvc: Consume payment.request
+    PaymentSvc->>PaymentSvc: Process M-Pesa / Card Transaction
+    PaymentSvc->>Kafka: Publish payment.completed
+
+    Kafka->>OrderSvc: Consume payment.completed
+    OrderSvc->>OrderSvc: Transition Order to CONFIRMED<br/>Save OutboxEvent (order.confirmed)
+    Outbox->>Kafka: Publish order.confirmed
+
+    Kafka->>NotifSvc: Consume order.confirmed
+    NotifSvc->>NotifSvc: Dispatch SMS/Email alert & initialize delivery tracker
+```
+
+### 2. Compensating Transaction Flow (Payment Failure)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OrderSvc as 🛒 Order Service
+    participant Kafka as ⚡ Apache Kafka
+    participant PaymentSvc as 💳 Payment Service
+    participant CatalogSvc as 📦 Catalog Service
+    participant NotifSvc as 🔔 Notification Service
+
+    Note over OrderSvc,PaymentSvc: Stock has been reserved. Payment requested.
+    PaymentSvc->>PaymentSvc: Insufficient funds or STK push timed out
+    PaymentSvc->>Kafka: Publish payment.failed
+
+    Kafka->>OrderSvc: Consume payment.failed
+    OrderSvc->>OrderSvc: Transition Order to CANCELLED<br/>Save OutboxEvent (stock.released)<br/>Save OutboxEvent (order.cancelled)
+
+    par Compensation
+        OrderSvc->>Kafka: Publish stock.released
+        Kafka->>CatalogSvc: Consume stock.released
+        CatalogSvc->>CatalogSvc: Re-increment available stock levels
+    and User Notification
+        OrderSvc->>Kafka: Publish order.cancelled
+        Kafka->>NotifSvc: Consume order.cancelled
+        NotifSvc->>NotifSvc: Notify customer of order cancellation
     end
 ```
 
 ---
 
-## Event Catalogue
+## Kafka Event Catalogue
 
-| Topic | Producer | Consumers | Payload Summary |
-|------|----------|-----------|-----------------|
-| `order.created` | Order Service | Catalog Service, Order Service (for idempotency) | Order details (userId, addressId, items) |
-| `stock.reserved` | Catalog Service | Order Service, Notification Service | OrderId, productId, quantity |
-| `stock.reservation-failed` | Catalog Service | Order Service | OrderId, productId, reason |
-| `payment.completed` | Payment Service | Order Service, Notification Service | OrderId, paymentId, amount, method |
-| `payment.failed` | Payment Service | Order Service, Notification Service | OrderId, paymentId, reason |
-| `stock.released` | Order Service | Catalog Service, Notification Service | OrderId, productId |
-| `order.confirmed` | Order Service | Notification Service | OrderId, final status |
-| `order.cancelled` | Order Service | Notification Service | OrderId, cancellation reason |
-| `delivery.status-updated` | Notification Service | Order Service (optional) | OrderId, status, updatedAt |
+All messages are wrapped in a generic `EventEnvelope<T>` containing `eventId`, `orderId`, `timestamp`, `eventType`, and typed `payload`.
 
-**Outbox Pattern** – each service writes events to an `outbox_events` table inside the same transaction that updates business data. A scheduled poller (`OutboxPublisher`) reads pending rows and publishes them to Kafka, guaranteeing exactly‑once delivery.
-
-**Retry & DLT** – Spring‑Kafka’s `RetryTopicConfiguration` creates `<topic>.retry‑<n>` topics (3 attempts, exponential back‑off) and a dead‑letter topic `<topic>.DLT` for messages that still fail. Idempotent consumers use a `processed_events` table to ignore duplicates.
+| Topic Name | Producer Service | Consumer Service(s) | Payload Purpose |
+| :--- | :--- | :--- | :--- |
+| **`order.created`** | `order-service` | `catalog-service` | Notifies catalog to reserve requested stock quantities. |
+| **`stock.reserved`** | `catalog-service` | `order-service` | Confirms inventory hold; triggers payment phase. |
+| **`stock.reservation-failed`** | `catalog-service` | `order-service` | Signals out-of-stock; cancels the order immediately. |
+| **`payment.completed`** | `payment-service` | `order-service`, `notification-service` | Confirms transaction success; triggers final order confirmation. |
+| **`payment.failed`** | `payment-service` | `order-service`, `notification-service` | Triggers saga rollback compensation (releases stock). |
+| **`stock.released`** | `order-service` | `catalog-service` | Compensating action restoring inventory after failed checkout. |
+| **`order.confirmed`** | `order-service` | `notification-service` | Orders confirmed; schedules regional delivery dispatch. |
+| **`order.cancelled`** | `order-service` | `notification-service` | Final cancellation notice dispatched to customer. |
+| **`delivery.status-updated`** | `notification-service` | `order-service` | Updates order tracking milestones across distribution hubs. |
 
 ---
 
-## Tech Stack
+## Reliability & Resilience Patterns
 
-| Category | Technology |
-|----------|------------|
-| Language | Java 21 |
-| Framework | Spring Boot 3.3, Spring Cloud 2023.0, Spring Data JPA |
-| Messaging | Apache Kafka (KRaft mode) |
-| Resilience | Resilience4j (circuit breaker, retry, time‑limiter) |
-| Testing | JUnit 5, Mockito, Testcontainers |
-| Database | PostgreSQL 16 (Flyway migrations) |
-| Containerisation | Docker, Docker Compose |
-| Documentation | OpenAPI (springdoc‑openapi), Swagger UI |
-
-| Service | Port | Responsibility | Database |
-|--------|------|----------------|----------|
-| API Gateway | 8080 | Routing, JWT validation, circuit breaking | – |
-| User Service | 8081 | Register / login, JWT issuance, user management | Shared Postgres (user schema) |
-| Catalog Service | 8082 | Products, categories, stock levels, reservation | Shared Postgres (catalog schema) |
-| Order Service | 8083 | Cart checkout, saga orchestrator, order lifecycle | Shared Postgres (order schema) |
-| Payment Service | 8084 | M‑Pesa STK push simulation, card payments, refunds | Shared Postgres (payment schema) |
-| Notification Service | 8085 | Email/SMS simulation, delivery tracking, notifications | Shared Postgres (notification schema) |
+1. **Transactional Outbox Pattern**:
+   Relational writes and event generation occur within the same local ACID transaction. A background scheduler reads pending rows and publishes them to Kafka, guaranteeing *at-least-once* delivery.
+2. **Idempotent Consumers**:
+   Every consumer checks a `processed_events` table indexed by `(consumer_name, event_id)` to deduplicate incoming messages on partition rebalances or producer retries.
+3. **Dead Letter Topic (DLT) & Exponential Backoff**:
+   Configured via Spring Kafka's `@RetryableTopic`. If a message fails processing, it is retried with exponential backoff before being safely routed to `<topic>.DLT` for inspection.
+4. **Resilience4j Circuit Breakers**:
+   Configured on the API Gateway with:
+   - **Failure Rate Threshold**: 50%
+   - **Wait Duration in Open State**: 10 seconds
+   - **Permitted Number of Calls in Half-Open State**: 5
+   - **Fallback Routing**: Forwards to `/fallback/<service>` returning `503 Service Unavailable` with informative JSON.
 
 ---
 
-## Quick Start
+## Quick Start & Setup Guide
 
+### Prerequisites
+* **Docker & Docker Compose** (Docker Desktop on Windows/macOS or Docker Engine on Linux)
+* **Java 21** & **Maven 3.9+** (only required if building outside containers)
+
+### 1. Clone & Configure Environment
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/storefront-services.git && cd storefront-services
+git clone https://github.com/crnjihia/storefront-services.git
+cd storefront-services
 
-# Build and start all services with Docker Compose
-docker compose up --build -d
-
-# Verify everything is healthy (wait a few seconds)
-watch -n 5 docker compose ps
+# Copy default environment variables
+cp .env.example .env
 ```
 
-### Run a Single Service Locally (example: User Service)
+### 2. Launch with Docker Compose
+```bash
+# Build and start all services, Kafka, PostgreSQL, and Kafka UI
+docker compose up -d --build
+
+# Inspect container health
+docker compose ps
+```
+
+### 3. Access Monitoring & UIs
+* **API Gateway**: `http://localhost:8080`
+* **Kafka UI Dashboard**: `http://localhost:8090` (inspect topics, consumers, messages, and lag)
+* **PostgreSQL Broker**: `localhost:5432` (`postgres` / `postgres`)
+
+---
+
+## Testing Guide & Verification
+
+### Automated Smoke Test
+Run the end-to-end checkout smoke test script:
 
 ```bash
-# Build the module
-./mvnw -pl user-service -am clean package
+# Using Make
+make smoke-test
 
-# Run the service (uses Spring profile "default")
-java -jar user-service/target/user-service-0.0.1-SNAPSHOT.jar
+# Or directly via Bash
+bash scripts/smoke-test.sh
+```
+
+### Local Unit & Integration Tests
+```bash
+# Run unit tests across all modules
+mvn clean test
+
+# Run integration tests (with Kafka Testcontainers)
+mvn clean verify
 ```
 
 ---
 
-## API Examples (via Gateway)
+## cURL End-to-End Walkthrough
+
+### 1. Check Gateway Health
+```bash
+curl -i http://localhost:8080/actuator/health
+```
+
+### 2. Generate a Test JWT
+The gateway validates HMAC-SHA256 tokens using the configured secret (`JWT_SECRET` in `.env`):
 
 ```bash
-# Register a new user
-curl -X POST http://localhost:8080/api/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email":"john@example.com","password":"Secret123"}'
+# Using Python to generate a valid token
+TOKEN=$(python -c '
+import jwt, datetime, uuid
+payload = {"sub": str(uuid.uuid4()), "role": "USER", "exp": int((datetime.datetime.utcnow() + datetime.timedelta(hours=1)).timestamp())}
+print(jwt.encode(payload, "change-me-to-a-strong-secret", algorithm="HS256"))
+')
+echo "Token: $TOKEN"
+```
 
-# Login (returns JWT)
-TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"email":"john@example.com","password":"Secret123"}' | jq -r .token)
-
-# List products (public endpoint)
+### 3. List Available Products (Public Endpoint)
+```bash
 curl -s http://localhost:8080/api/products
-
-# Create an order (requires JWT)
-ORDER=$(cat <<EOF
-{
-  "userId":"$(uuidgen)",
-  "addressId":"$(uuidgen)",
-  "items":[{"productId":"$(uuidgen)","quantity":1,"price":100.00}]
-}
-EOF
-)
-
-curl -X POST http://localhost:8080/api/orders \
-     -H "Authorization: Bearer $TOKEN" \
-     -H "Content-Type: application/json" \
-     -d "$ORDER"
-
-# Track delivery timeline
-curl -H "Authorization: Bearer $TOKEN" \
-     http://localhost:8080/api/deliveries/<orderId>/timeline
 ```
 
----
-
-## Resilience
-
-Each route in the API Gateway is protected by a **Resilience4j circuit breaker** (`usersCB`, `catalogCB`, `ordersCB`, `paymentsCB`, `notificationsCB`). The fallback URI returns a JSON payload with HTTP 503.
-
-**Demo a failure**:
+### 4. Create an Order (Initiate Saga)
 ```bash
-# Stop the payment service container
-docker compose stop payment-service
+ORDER_ID=$(curl -s -X POST http://localhost:8080/api/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "addressId": "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e",
+    "items": [
+      {
+        "productId": "c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f",
+        "quantity": 1,
+        "price": 2500.00
+      }
+    ]
+  }' | tr -d '"')
 
-# The next payment request will hit the circuit breaker and receive the fallback response.
+echo "Created Order ID: $ORDER_ID"
+```
+
+### 5. Check Order Confirmation Status
+```bash
+curl -s -X GET http://localhost:8080/api/orders/$ORDER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 6. Track Regional Delivery Status
+```bash
+curl -s -X GET http://localhost:8080/api/deliveries/$ORDER_ID/timeline \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Testing Strategy
+## Project Structure
 
-- **Unit tests** for each module using JUnit 5 and Mockito.
-- **Integration tests** with Testcontainers (Kafka, PostgreSQL) exercising the outbox, retry, and saga flows.
-- **End‑to‑end smoke test** (`scripts/smoke-test.sh`) registers a user, creates an order, polls for confirmation, and displays the delivery timeline.
-
----
-
-## Design Decisions & Trade‑offs
-
-| Decision | Reasoning |
-|----------|-----------|
-| **Saga orchestration** (central OrderSaga) vs. choreography | Guarantees a clear single source of truth for order state, easier to reason about compensation, and fits the checkout flow where the order service coordinates multiple domains. |
-| **Outbox pattern** | Prevents lost events during DB failures; decouples transaction commit from Kafka publishing. |
-| **Per‑service database schema** | Enables independent evolution and scaling, while still using a single PostgreSQL instance for simplicity. |
-| **Simulated Daraja (M‑Pesa) adapter** | Allows deterministic testing without external dependencies; can be swapped for the real Daraja API later. |
-| **No Redis cache** | Keeps the stack minimal for the MVP; can be added later for rate‑limiting or caching. |
-
-### Roadmap
-- Replace the simulated M‑Pesa adapter with real Daraja integration.
-- Add a Redis cache for rate‑limiting and session storage.
-- Deploy to Kubernetes with Helm charts.
-- Integrate OpenTelemetry for distributed tracing across services.
-- Implement real email/SMS providers (e.g., Twilio, SendGrid).
-
----
-
-## License
-
-MIT License © 2024 Christopher Njihia
+```
+storefront-services/
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # GitHub Actions CI workflow
+├── api-gateway/                 # Spring Cloud Gateway + Resilience4j + JWT filter
+├── catalog-service/             # Inventory, Stock Reservation & Stock Release
+├── common-events/               # Shared Kafka event contracts & DTOs
+├── notification-service/        # Email/SMS simulation & County-aware delivery tracking
+├── order-service/               # Checkout Saga Orchestrator & Outbox publisher
+├── payment-service/             # M-Pesa STK push & Card payment processing
+├── user-service/                # User profiles and authentication
+├── docker/
+│   └── postgres/
+│       └── init-databases.sql   # Per-service database initialization script
+├── scripts/
+│   └── smoke-test.sh            # End-to-end automated smoke test
+├── .env.example                 # Environment variable templates
+├── docker-compose.yml           # Complete containerized multi-service ecosystem
+├── Makefile                     # Developer lifecycle commands
+├── LICENSE                      # MIT Open Source License
+├── pom.xml                      # Parent multi-module Maven POM
+└── README.md                    # System architecture documentation
+```
 
 ---
 
-## Author
+## CI/CD & Code Quality
 
-**Christopher Njihia** –  Full‑stack Java engineer, specialist in microservice architectures and Kenyan fintech ecosystems.
+Continuous Integration runs via **GitHub Actions** on every push to `main` and all pull requests:
+* **Java Setup**: Eclipse Temurin JDK 21
+* **Dependency Caching**: Maven local repository cache
+* **Build Verification**: Multi-module compilation, unit tests, and integration test execution via `mvn verify`.
+
+---
+
+## Contributing & License
+
+Contributions are welcome! Please open an issue or pull request.
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+Developed with ❤️ by **[Christopher Njihia](https://github.com/crnjihia)**.
