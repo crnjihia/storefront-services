@@ -1,2 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
 jwt:
-  secret: "change-me-to-a-strong-secret"
+  secret: ${JWT_SECRET:change-me-to-a-strong-secret}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+    instances:
+      usersCB:
+        baseConfig: default
+      catalogCB:
+        baseConfig: default
+      ordersCB:
+        baseConfig: default
+      paymentsCB:
+        baseConfig: default
+      notificationsCB:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true

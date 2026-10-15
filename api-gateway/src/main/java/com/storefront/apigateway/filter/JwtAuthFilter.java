@@ -77,7 +77,7 @@ public class JwtAuthFilter implements WebFilter, Ordered {
             return true;
         }
         // GET products is public
-        if ("GET".equalsIgnoreCase(request.getMethodValue()) && path.startsWith("/api/products/")) {
+        if ("GET".equalsIgnoreCase(request.getMethod().name()) && path.startsWith("/api/products/")) {
             return true;
         }
         // specific callback path is public
