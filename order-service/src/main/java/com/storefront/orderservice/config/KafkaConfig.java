@@ -63,23 +63,27 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
-            ConsumerFactory<String, Object> consumerFactory) {
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory);
-        // DefaultErrorHandler will be overridden by RetryTopicConfiguration bean
-        factory.setCommonErrorHandler(new DefaultErrorHandler());
-        return factory;
+    public org.springframework.kafka.listener.DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
+            KafkaTemplate<String, Object> kafkaTemplate) {
+        return new org.springframework.kafka.listener.DeadLetterPublishingRecoverer(kafkaTemplate,
+                (record, ex) -> new org.apache.kafka.common.TopicPartition(record.topic() + ".DLT", record.partition()));
     }
 
-    // ---------- Retry / DLT configuration ----------
     @Bean
-    public RetryTopicConfiguration retryTopicConfiguration() {
-        return RetryTopicConfigurationBuilder
-                .newInstance()
-                .maxAttempts(3)
-                .exponentialBackOff(1000L, 2.0, 8000L) // start 1s, double each retry, max 8s
-                .dltSuffix(".DLT")
-                .create();
+    public DefaultErrorHandler defaultErrorHandler(
+            org.springframework.kafka.listener.DeadLetterPublishingRecoverer recoverer) {
+        // 3 attempts: initial attempt + 2 retries, 1000ms interval
+        org.springframework.util.backoff.FixedBackOff backOff = new org.springframework.util.backoff.FixedBackOff(1000L, 2L);
+        return new DefaultErrorHandler(recoverer, backOff);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
+            ConsumerFactory<String, Object> consumerFactory,
+            DefaultErrorHandler defaultErrorHandler) {
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+        factory.setCommonErrorHandler(defaultErrorHandler);
+        return factory;
     }
 }

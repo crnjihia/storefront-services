@@ -19,7 +19,7 @@ public class OrderEventListener {
     private final IdempotentConsumerHelper idempotentHelper;
 
     @KafkaListener(topics = "order.created", groupId = "order-service")
-    public void handleOrderCreated(@Header(KafkaHeaders.RECEIVED_MESSAGE_KEY) String key,
+    public void handleOrderCreated(@Header(name = KafkaHeaders.RECEIVED_KEY, required = false) String key,
                                    @Payload EventEnvelope<Object> envelope,
                                    ConsumerRecord<String, Object> record) {
         // The eventId from the envelope is used for idempotency tracking

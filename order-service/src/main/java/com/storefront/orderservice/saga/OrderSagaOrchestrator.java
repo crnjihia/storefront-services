@@ -27,7 +27,7 @@ public class OrderSagaOrchestrator {
     private final SagaStateRepository sagaStateRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final IdempotentConsumerHelper idempotentHelper;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     private static final String CONSUMER = "order-saga-orchestrator";
 
