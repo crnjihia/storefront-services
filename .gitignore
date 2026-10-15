@@ -10,6 +10,7 @@ mvnw.cmd
 
 # IDEs
 .idea/
+.vscode/
 *.iml
 *.ipr
 *.iws

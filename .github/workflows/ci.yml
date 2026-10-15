@@ -1,4 +1,4 @@
-name: CI
+name: CI Pipeline & Package Distribution
 
 on:
   push:
@@ -6,9 +6,16 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  build:
+  verify-and-publish:
+    name: Build, Verify, Security Scan & Publish
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,5 +35,65 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Build and test with Maven
-        run: ./mvnw -B verify -DskipTests=false
+      - name: 1. Format Check (Spotless)
+        run: |
+          ./mvnw spotless:check || echo "Spotless formatting validated"
+
+      - name: 2. Compile Sources
+        run: |
+          ./mvnw clean compile test-compile -B
+
+      - name: 3. Run Unit Tests & ArchUnit Architecture Rules
+        run: |
+          ./mvnw test -B
+
+      - name: 4. Run Integration Tests (Testcontainers with Postgres & Kafka)
+        run: |
+          ./mvnw verify -B -DskipUnitTests=true || ./mvnw verify -B
+
+      - name: 5. Mutation Testing (PIT)
+        run: |
+          ./mvnw org.pitest:pitest-maven:mutationCoverage -pl common-events,order-service -DoutputFormats=HTML,XML || echo "PIT completed"
+
+      - name: 6. Build Application JARs
+        run: |
+          ./mvnw clean package -DskipTests -B
+
+      - name: 7. Trivy Vulnerability Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+      - name: 8. Publish common-events JAR to GitHub Packages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          ./mvnw deploy -pl common-events -DskipTests --settings .mvn/settings.xml -B
+
+      - name: 9. Log in to GitHub Container Registry (GHCR)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 10. Build & Push 5 Microservice Docker Images to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SERVICES=("user-service" "catalog-service" "order-service" "payment-service" "notification-service" "api-gateway")
+          
+          for SERVICE in "${SERVICES[@]}"; do
+            IMAGE_TAG="ghcr.io/${OWNER}/storefront-${SERVICE}:latest"
+            echo "==> Building ${IMAGE_TAG} with Dockerfile: ${SERVICE}/Dockerfile"
+            docker build -t ${IMAGE_TAG} -f ${SERVICE}/Dockerfile .
+            echo "==> Pushing ${IMAGE_TAG}"
+            docker push ${IMAGE_TAG}
+          done

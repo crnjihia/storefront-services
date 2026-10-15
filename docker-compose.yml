@@ -37,11 +37,11 @@ services:
       KAFKA_ADVERTISED_LISTENERS: ${KAFKA_CFG_ADVERTISED_LISTENERS}
       KAFKA_NODE_ID: ${KAFKA_CFG_NODE_ID}
     healthcheck:
-      test: ["CMD", "bash", "-c", "nc -z localhost 9092"]
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/9092"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 120s
+      start_period: 20s
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -60,11 +60,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-volumes:
-  pgdata:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api-gateway:
+    image: storefront-api-gateway:latest
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
@@ -87,6 +96,7 @@ volumes:
     restart: unless-stopped
 
   user-service:
+    image: storefront-user-service:latest
     build:
       context: .
       dockerfile: user-service/Dockerfile
@@ -106,6 +116,7 @@ volumes:
     restart: unless-stopped
 
   catalog-service:
+    image: storefront-catalog-service:latest
     build:
       context: .
       dockerfile: catalog-service/Dockerfile
@@ -123,6 +134,7 @@ volumes:
     restart: unless-stopped
 
   order-service:
+    image: storefront-order-service:latest
     build:
       context: .
       dockerfile: order-service/Dockerfile
@@ -140,6 +152,7 @@ volumes:
     restart: unless-stopped
 
   payment-service:
+    image: storefront-payment-service:latest
     build:
       context: .
       dockerfile: payment-service/Dockerfile
@@ -157,6 +170,7 @@ volumes:
     restart: unless-stopped
 
   notification-service:
+    image: storefront-notification-service:latest
     build:
       context: .
       dockerfile: notification-service/Dockerfile
@@ -173,3 +187,5 @@ volumes:
       retries: 5
     restart: unless-stopped
 
+volumes:
+  pgdata:
