@@ -29,13 +29,13 @@ public class OutboxPublisher {
                 // Deserialize payload to Object for KafkaTemplate (JsonSerializer will re‑serialize)
                 Object payloadObject = objectMapper.readValue(event.getPayload(), Object.class);
                 String key = event.getAggregateId() != null ? event.getAggregateId().toString() : null;
-                kafkaTemplate.send(event.getTopic(), key, payloadObject).addCallback(result -> {
-                    // Mark as published on successful send
-                    event.setPublishedAt(Instant.now());
-                    outboxEventRepository.save(event);
-                }, ex -> {
-                    log.error("Failed to publish outbox event {} to topic {}: {}", event.getId(), event.getTopic(), ex.getMessage());
-                    // Keep publishedAt null so it will be retried on next cycle
+                kafkaTemplate.send(event.getTopic(), key, payloadObject).whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        event.setPublishedAt(Instant.now());
+                        outboxEventRepository.save(event);
+                    } else {
+                        log.error("Failed to publish outbox event {} to topic {}: {}", event.getId(), event.getTopic(), ex.getMessage());
+                    }
                 });
             } catch (Exception e) {
                 log.error("Error processing outbox event {}: {}", event.getId(), e.getMessage(), e);
