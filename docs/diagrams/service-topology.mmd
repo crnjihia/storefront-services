@@ -1,0 +1,100 @@
+graph TB
+    subgraph Clients["Clients"]
+        MobileApp["Mobile App (Android/iOS)"]
+        WebBrowser["Web Browser (React/Next.js)"]
+    end
+
+    subgraph EdgeLayer["Edge & Ingress Layer"]
+        Gateway["Spring Cloud Gateway (:8080)<br/>Resilience4j Circuit Breakers<br/>JWT Auth & Correlation ID MDC"]
+        RedisCache[("Redis 7 (:6379)<br/>Rate Limiting & Token Cache")]
+        Gateway -.->|Token Verification / Rate Limit| RedisCache
+    end
+
+    MobileApp -->|HTTPS /api/*| Gateway
+    WebBrowser -->|HTTPS /api/*| Gateway
+
+    subgraph ServiceMesh["Microservices Cluster"]
+        subgraph UserServiceDomain["User Service (:8081)"]
+            UserService["User Service<br/>Spring Boot 3"]
+            UserDB[("PostgreSQL<br/>user_db:5432<br/>Flyway Validated")]
+            UserService --> UserDB
+        end
+
+        subgraph CatalogServiceDomain["Catalog Service (:8082)"]
+            CatalogService["Catalog Service<br/>Spring Boot 3"]
+            CatalogDB[("PostgreSQL<br/>catalog_db:5433<br/>Flyway Validated")]
+            CatalogService --> CatalogDB
+        end
+
+        subgraph OrderServiceDomain["Order Service (:8083)"]
+            OrderService["Order Service<br/>Saga Orchestrator<br/>Transactional Outbox Relay"]
+            OrderDB[("PostgreSQL<br/>order_db:5434<br/>Flyway Validated")]
+            OrderService --> OrderDB
+        end
+
+        subgraph PaymentServiceDomain["Payment Service (:8084)"]
+            PaymentService["Payment Service<br/>Idempotency Engine<br/>HMAC Verifier"]
+            PaymentDB[("PostgreSQL<br/>payment_db:5435<br/>Flyway Validated")]
+            PaymentService --> PaymentDB
+        end
+
+        subgraph NotificationServiceDomain["Notification Service (:8085)"]
+            NotificationService["Notification Service<br/>Idempotent Dispatcher"]
+            NotificationDB[("PostgreSQL<br/>notification_db:5436<br/>Flyway Validated")]
+            NotificationService --> NotificationDB
+        end
+    end
+
+    Gateway -->|/api/v1/users/**| UserService
+    Gateway -->|/api/v1/catalog/**| CatalogService
+    Gateway -->|/api/v1/orders/**| OrderService
+    Gateway -->|/api/v1/payments/**| PaymentService
+    Gateway -->|/api/v1/notifications/**| NotificationService
+
+    subgraph EventStream["Apache Kafka Event Bus (:9092)"]
+        T_OrderCreated[["order.created"]]
+        T_StockReserved[["stock.reserved"]]
+        T_StockFailed[["stock.reservation_failed"]]
+        T_StockReleased[["stock.released"]]
+        T_PaymentInitiated[["payment.initiated"]]
+        T_PaymentCompleted[["payment.completed"]]
+        T_PaymentFailed[["payment.failed"]]
+        T_OrderCancelled[["order.cancelled"]]
+        T_OrderConfirmed[["order.confirmed"]]
+        T_NotificationSend[["notification.send"]]
+    end
+
+    OrderService -->|Outbox Relay| T_OrderCreated
+    OrderService -->|Outbox Relay| T_PaymentInitiated
+    OrderService -->|Compensation| T_StockReleased
+    OrderService -->|Compensation| T_OrderCancelled
+    OrderService -->|Success| T_OrderConfirmed
+
+    CatalogService -->|Consume| T_OrderCreated
+    CatalogService -->|Outbox Relay| T_StockReserved
+    CatalogService -->|Outbox Relay| T_StockFailed
+    CatalogService -->|Consume Compensation| T_StockReleased
+
+    OrderService -->|Consume| T_StockReserved
+    OrderService -->|Consume| T_StockFailed
+
+    PaymentService -->|Consume| T_PaymentInitiated
+    PaymentService -->|Outbox Relay| T_PaymentCompleted
+    PaymentService -->|Outbox Relay| T_PaymentFailed
+
+    OrderService -->|Consume| T_PaymentCompleted
+    OrderService -->|Consume| T_PaymentFailed
+
+    NotificationService -->|Consume| T_NotificationSend
+    NotificationService -->|Consume| T_OrderConfirmed
+    NotificationService -->|Consume| T_OrderCancelled
+
+    subgraph ExternalProviders["External Gateways"]
+        Daraja["Safaricom Daraja API<br/>(M-Pesa STK Push)"]
+        Stripe["Stripe Payments API<br/>(Card Processing)"]
+        FCM["Firebase Cloud Messaging<br/>(Push Notifications / SMS)"]
+    end
+
+    PaymentService -->|STK Push / HMAC Webhook| Daraja
+    PaymentService -->|Card Tokenization| Stripe
+    NotificationService -->|HTTP/2 Dispatch| FCM

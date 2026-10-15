@@ -1,0 +1,59 @@
+graph LR
+    subgraph Producers["Producers"]
+        P_Order["Order Service"]
+        P_Catalog["Catalog Service"]
+        P_Payment["Payment Service"]
+    end
+
+    subgraph KafkaCore["Kafka Primary Topics (3 Partitions, Replication=1 dev / 3 prod)"]
+        T1["order.created"]
+        T2["order.cancelled"]
+        T3["payment.initiated"]
+        T4["payment.completed"]
+        T5["payment.failed"]
+        T6["notification.send"]
+        T7["stock.reserved"]
+        T8["stock.released"]
+    end
+
+    subgraph DeadLetterTopics["Dead Letter Queue (*.DLT Topics)"]
+        DLT1["order.created.DLT"]
+        DLT2["order.cancelled.DLT"]
+        DLT3["payment.initiated.DLT"]
+        DLT4["payment.completed.DLT"]
+        DLT5["payment.failed.DLT"]
+        DLT6["notification.send.DLT"]
+    end
+
+    subgraph Consumers["Consumer Groups & DefaultErrorHandler"]
+        CG_Catalog["catalog-service-group<br/>Consumes: order.created, stock.released<br/>Retry: 3 attempts @ 1s interval"]
+        CG_Order["order-service-group<br/>Consumes: stock.reserved, payment.completed, payment.failed<br/>Retry: 3 attempts @ 1s interval"]
+        CG_Payment["payment-service-group<br/>Consumes: payment.initiated<br/>Retry: 3 attempts @ 1s interval"]
+        CG_Notification["notification-service-group<br/>Consumes: notification.send, order.cancelled, order.confirmed<br/>Retry: 3 attempts @ 1s interval"]
+    end
+
+    P_Order --> T1
+    P_Order --> T2
+    P_Order --> T3
+    P_Order --> T8
+    P_Catalog --> T7
+    P_Payment --> T4
+    P_Payment --> T5
+
+    T1 --> CG_Catalog
+    T8 --> CG_Catalog
+
+    T7 --> CG_Order
+    T4 --> CG_Order
+    T5 --> CG_Order
+
+    T3 --> CG_Payment
+
+    T6 --> CG_Notification
+    T2 --> CG_Notification
+
+    CG_Catalog -.->|After 3 Failures| DLT1
+    CG_Order -.->|After 3 Failures| DLT4
+    CG_Order -.->|After 3 Failures| DLT5
+    CG_Payment -.->|After 3 Failures| DLT3
+    CG_Notification -.->|After 3 Failures| DLT6

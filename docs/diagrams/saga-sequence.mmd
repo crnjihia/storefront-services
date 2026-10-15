@@ -1,0 +1,58 @@
+sequenceDiagram
+    autonumber
+    actor Customer as Customer (Mobile/Web)
+    participant Gateway as API Gateway (:8080)
+    participant Order as Order Service (:8083)
+    participant Catalog as Catalog Service (:8082)
+    participant Payment as Payment Service (:8084)
+    participant Mpesa as Safaricom Daraja (M-Pesa)
+    participant Notify as Notification Service (:8085)
+
+    Note over Customer,Notify: SAGA SCENARIO A: Happy Path (Checkout to Order Confirmation)
+
+    Customer->>Gateway: POST /api/v1/orders (Idempotency-Key: X-UUID)
+    Gateway->>Order: Forward Order Creation
+    Order->>Order: Write Order (PENDING) & Outbox (OrderCreated)
+    Order-->>Gateway: HTTP 202 Accepted (Order ID, Status: PENDING)
+    Gateway-->>Customer: Order Placed (Awaiting Payment Confirmation)
+
+    Order->>Catalog: Kafka [order.created]
+    Catalog->>Catalog: Deduct Stock & Write Outbox (StockReserved)
+    Catalog->>Order: Kafka [stock.reserved]
+
+    Order->>Order: Update Saga State: STOCK_RESERVED
+    Order->>Payment: Kafka [payment.initiated] (Amount, Phone: 2547XXXXXXXX)
+    Payment->>Mpesa: Trigger STK Push (daraja.safaricom.co.ke)
+    Mpesa-->>Customer: Enter M-Pesa PIN on Phone
+    Customer-->>Mpesa: PIN Confirmed
+    Mpesa->>Payment: POST /api/v1/payments/mpesa/callback (HMAC Signature)
+    Payment->>Payment: Verify HMAC & Record Idempotent Payment
+    Payment->>Order: Kafka [payment.completed]
+
+    Order->>Order: Update Order (CONFIRMED) & Outbox (OrderConfirmed)
+    Order->>Notify: Kafka [notification.send / order.confirmed]
+    Notify->>Customer: SMS / Push: "Order #XYZ confirmed! Receipt: QGH..."
+
+    Note over Customer,Notify: SAGA SCENARIO B: Compensation Path (Payment Fails / Cancelled)
+
+    Customer->>Gateway: POST /api/v1/orders (New Order)
+    Gateway->>Order: Forward Order Creation
+    Order->>Catalog: Kafka [order.created]
+    Catalog->>Catalog: Reserve Stock
+    Catalog->>Order: Kafka [stock.reserved]
+
+    Order->>Payment: Kafka [payment.initiated]
+    Payment->>Mpesa: Trigger STK Push
+    Mpesa-->>Customer: STK Push Prompt
+    Customer-->>Mpesa: Cancelled or Timeout (or Insufficient Funds)
+    Mpesa->>Payment: POST /api/v1/payments/mpesa/callback (ResultCode != 0)
+    Payment->>Payment: Mark Payment FAILED
+    Payment->>Order: Kafka [payment.failed] (Reason: INSUFFICIENT_FUNDS)
+
+    Note over Order: SAGA COMPENSATION TRIGGERED
+    Order->>Order: Update Saga State: COMPENSATING
+    Order->>Catalog: Kafka [stock.released] (OrderId, Items to Restock)
+    Catalog->>Catalog: Restock Inventory in DB (compensating action)
+    Order->>Order: Update Order Status: CANCELLED
+    Order->>Notify: Kafka [order.cancelled]
+    Notify->>Customer: SMS / Push: "Payment failed for Order #XYZ. Stock released."

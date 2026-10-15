@@ -1,0 +1,627 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Storefront Services API",
+    "description": "Production-grade Kenyan-market e-commerce microservices platform (Jumia architecture). Includes User, Catalog, Order (Saga Orchestration), Payment (M-Pesa STK push & Stripe),  and Notification services routed through Spring Cloud Gateway with Resilience4j.\n",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway Local Dev"
+    }
+  ],
+  "paths": {
+    "/api/v1/users": {
+      "get": {
+        "summary": "List all users",
+        "tags": [
+          "User Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of registered users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a new customer",
+        "tags": [
+          "User Service"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/products": {
+      "get": {
+        "summary": "List or search catalog products",
+        "tags": [
+          "Catalog Service"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated product list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPageResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new product with stock",
+        "tags": [
+          "Catalog Service"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product registered in catalog"
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "summary": "Place an order (Triggers Checkout Saga)",
+        "tags": [
+          "Order Service"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Unique UUID key to prevent duplicate checkouts",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Order accepted, Saga initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "409": {
+            "description": "Duplicate request with conflicting payload"
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{orderId}": {
+      "get": {
+        "summary": "Get order details and current Saga status",
+        "tags": [
+          "Order Service"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/mpesa/stkpush": {
+      "post": {
+        "summary": "Initiate M-Pesa STK Push",
+        "tags": [
+          "Payment Service"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MpesaStkPushRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "STK Push prompt dispatched to customer phone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MpesaStkResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/mpesa/callback": {
+      "post": {
+        "summary": "Safaricom Daraja STK Push Callback Webhook",
+        "tags": [
+          "Payment Service"
+        ],
+        "parameters": [
+          {
+            "name": "X-Daraja-Signature",
+            "in": "header",
+            "required": true,
+            "description": "HMAC-SHA256 signature calculated over raw request body using shared secret",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DarajaCallbackPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Callback acknowledged and processed"
+          },
+          "401": {
+            "description": "Invalid HMAC signature"
+          }
+        }
+      }
+    },
+    "/fallback/catalog": {
+      "get": {
+        "summary": "Resilience4j Circuit Breaker Fallback for Catalog Service",
+        "tags": [
+          "API Gateway Fallback"
+        ],
+        "responses": {
+          "503": {
+            "description": "Circuit OPEN fallback",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "example": 10
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayFallbackResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fallback/payment": {
+      "post": {
+        "summary": "Resilience4j Circuit Breaker Fallback for Payment Service",
+        "tags": [
+          "API Gateway Fallback"
+        ],
+        "responses": {
+          "503": {
+            "description": "Circuit OPEN fallback",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "example": 10
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayFallbackResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateUserRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "fullName",
+          "phoneNumber"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "customer@jumia.co.ke"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Juma Mwangi"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "example": "+254712345678"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateProductRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "sku",
+          "priceKes",
+          "initialStock"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Samsung Galaxy A54 5G"
+          },
+          "sku": {
+            "type": "string",
+            "example": "SAM-A54-128"
+          },
+          "priceKes": {
+            "type": "number",
+            "example": 44999.0
+          },
+          "initialStock": {
+            "type": "integer",
+            "example": 150
+          }
+        }
+      },
+      "ProductPageResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "priceKes": {
+                  "type": "number"
+                },
+                "availableStock": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "totalPages": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreateOrderRequest": {
+        "type": "object",
+        "required": [
+          "userId",
+          "customerPhone",
+          "items"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerPhone": {
+            "type": "string",
+            "example": "254712345678"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "productId",
+                "quantity",
+                "unitPrice"
+              ],
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "unitPrice": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "STOCK_RESERVED",
+              "PAYMENT_INITIATED",
+              "CONFIRMED",
+              "CANCELLED"
+            ]
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MpesaStkPushRequest": {
+        "type": "object",
+        "required": [
+          "orderId",
+          "phoneNumber",
+          "amount"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "example": "254712345678"
+          },
+          "amount": {
+            "type": "number",
+            "example": 44999.0
+          }
+        }
+      },
+      "MpesaStkResponse": {
+        "type": "object",
+        "properties": {
+          "merchantRequestId": {
+            "type": "string"
+          },
+          "checkoutRequestId": {
+            "type": "string"
+          },
+          "responseCode": {
+            "type": "string"
+          },
+          "responseDescription": {
+            "type": "string"
+          },
+          "customerMessage": {
+            "type": "string"
+          }
+        }
+      },
+      "DarajaCallbackPayload": {
+        "type": "object",
+        "properties": {
+          "Body": {
+            "type": "object",
+            "properties": {
+              "stkCallback": {
+                "type": "object",
+                "properties": {
+                  "MerchantRequestID": {
+                    "type": "string"
+                  },
+                  "CheckoutRequestID": {
+                    "type": "string"
+                  },
+                  "ResultCode": {
+                    "type": "integer"
+                  },
+                  "ResultDesc": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "GatewayFallbackResponse": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "integer",
+            "example": 503
+          },
+          "error": {
+            "type": "string",
+            "example": "Service Unavailable"
+          },
+          "message": {
+            "type": "string",
+            "example": "Downstream service is temporarily unavailable. Circuit breaker OPEN."
+          },
+          "retryAfterSeconds": {
+            "type": "integer",
+            "example": 10
+          }
+        }
+      }
+    }
+  }
+}

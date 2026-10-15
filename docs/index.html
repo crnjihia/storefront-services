@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storefront Services API Documentation | Jumia Architecture</title>
+    <meta name="description" content="Production-grade API documentation for Storefront Services: Kenyan-market e-commerce backend with Kafka, Saga checkout, M-Pesa STK push, and Resilience4j circuit breaking.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Redoc Standalone -->
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-surface: #1e293b99;
+            --border-color: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-brand: #6366f1;
+            --accent-brand-hover: #4f46e5;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Top Bar */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.875rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .header-logo {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+        }
+
+        .header-title-box h1 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .header-title-box p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        .header-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .badge-live {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-live::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 8px #34d399;
+        }
+
+        .badge-version {
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border-color: rgba(99, 102, 241, 0.3);
+            font-family: var(--font-mono);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            font-family: var(--font-sans);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .btn-outline {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        .btn-outline:hover {
+            background: #334155;
+            border-color: #475569;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            transform: translateY(-1px);
+        }
+
+        /* Banner info bar */
+        .info-strip {
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(16, 185, 129, 0.08) 100%);
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+            padding: 0.75rem 2rem;
+            font-size: 0.8125rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-secondary);
+        }
+
+        .info-strip-content {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .info-item strong {
+            color: var(--text-primary);
+        }
+
+        /* Redoc Container Customizations */
+        #redoc-container {
+            min-height: calc(100vh - 120px);
+            background: #ffffff;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 0.75rem 1rem;
+            }
+            .header-badges, .info-strip {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sticky Navigation Header -->
+    <header class="header">
+        <a href="#" class="header-brand">
+            <div class="header-logo">🛒</div>
+            <div class="header-title-box">
+                <h1>Storefront Services API</h1>
+                <p>Jumia Architecture • Kenya Market</p>
+            </div>
+        </a>
+
+        <div class="header-badges">
+            <span class="badge badge-live">Production Grade</span>
+            <span class="badge badge-version">v1.0.0</span>
+            <span class="badge badge-version">OpenAPI 3.0.3</span>
+        </div>
+
+        <div class="header-actions">
+            <a href="openapi.yaml" download="storefront-openapi.yaml" class="btn btn-outline" title="Download OpenAPI YAML Specification">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Spec (YAML)
+            </a>
+            <a href="openapi.json" download="storefront-openapi.json" class="btn btn-outline" title="Download OpenAPI JSON Specification">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Spec (JSON)
+            </a>
+            <a href="https://github.com/crnjihia/storefront-services" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                GitHub Repo
+            </a>
+        </div>
+    </header>
+
+    <!-- Info Sub-bar -->
+    <div class="info-strip">
+        <div class="info-strip-content">
+            <div class="info-item">
+                <span>Architecture:</span>
+                <strong>Distributed Saga (Outbox Relay + Kafka)</strong>
+            </div>
+            <div class="info-item">
+                <span>Gateways:</span>
+                <strong>Spring Cloud Gateway + Resilience4j</strong>
+            </div>
+            <div class="info-item">
+                <span>Fintech:</span>
+                <strong>M-Pesa Daraja STK Push (HMAC-SHA256)</strong>
+            </div>
+            <div class="info-item">
+                <span>Market:</span>
+                <strong>Kenya (KES Currency / County Delivery)</strong>
+            </div>
+        </div>
+        <div>
+            <span>Edge Host: <code>http://localhost:8080</code></span>
+        </div>
+    </div>
+
+    <!-- Redoc Interactive Documentation Root -->
+    <div id="redoc-container"></div>
+
+    <script>
+        // Initialize Redoc with the committed OpenAPI specification
+        Redoc.init(
+            'openapi.json',
+            {
+                scrollYOffset: 60,
+                hideDownloadButton: true,
+                theme: {
+                    colors: {
+                        primary: {
+                            main: '#4f46e5'
+                        },
+                        success: {
+                            main: '#10b981'
+                        },
+                        warning: {
+                            main: '#f59e0b'
+                        },
+                        error: {
+                            main: '#ef4444'
+                        },
+                        text: {
+                            primary: '#1e293b',
+                            secondary: '#64748b'
+                        },
+                        http: {
+                            get: '#0ea5e9',
+                            post: '#10b981',
+                            put: '#f59e0b',
+                            delete: '#ef4444'
+                        }
+                    },
+                    typography: {
+                        fontSize: '15px',
+                        fontFamily: "'Inter', sans-serif",
+                        headings: {
+                            fontFamily: "'Inter', sans-serif",
+                            fontWeight: '700'
+                        },
+                        code: {
+                            fontSize: '13px',
+                            fontFamily: "'JetBrains Mono', monospace"
+                        }
+                    },
+                    sidebar: {
+                        backgroundColor: '#f8fafc',
+                        textColor: '#334155',
+                        activeTextColor: '#4f46e5',
+                        width: '280px'
+                    },
+                    rightPanel: {
+                        backgroundColor: '#0f172a',
+                        textColor: '#f8fafc',
+                        width: '42%'
+                    }
+                }
+            },
+            document.getElementById('redoc-container')
+        );
+    </script>
+</body>
+</html>
