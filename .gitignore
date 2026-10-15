@@ -1,12 +1,8 @@
 # Maven
 target/
-!.mvn/wrapper/maven-wrapper.jar
 **/target/
+.mvn/wrapper/dists/
 
-# Maven Wrapper
-.mvn/wrapper/
-mvnw
-mvnw.cmd
 
 # IDEs
 .idea/

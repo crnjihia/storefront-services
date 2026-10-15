@@ -35,6 +35,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Make Maven Wrapper Executable
+        run: chmod +x mvnw || true
+
       - name: 1. Format Check (Spotless)
         run: |
           ./mvnw spotless:check || echo "Spotless formatting validated"
