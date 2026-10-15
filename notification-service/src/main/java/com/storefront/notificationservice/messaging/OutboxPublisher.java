@@ -28,11 +28,13 @@ public class OutboxPublisher {
             try {
                 Object payloadObject = objectMapper.readValue(event.getPayload(), Object.class);
                 String key = event.getAggregateId() != null ? event.getAggregateId().toString() : null;
-                kafkaTemplate.send(event.getTopic(), key, payloadObject).addCallback(result -> {
-                    event.setPublishedAt(Instant.now());
-                    outboxEventRepository.save(event);
-                }, ex -> {
-                    log.error("Failed to publish outbox event {} to topic {}: {}", event.getId(), event.getTopic(), ex.getMessage());
+                kafkaTemplate.send(event.getTopic(), key, payloadObject).whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        event.setPublishedAt(Instant.now());
+                        outboxEventRepository.save(event);
+                    } else {
+                        log.error("Failed to publish outbox event {} to topic {}: {}", event.getId(), event.getTopic(), ex.getMessage());
+                    }
                 });
             } catch (Exception e) {
                 log.error("Error processing outbox event {}: {}", event.getId(), e.getMessage(), e);
