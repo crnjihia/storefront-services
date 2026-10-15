@@ -1,7 +1,35 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/payment_db}
+    username: ${SPRING_DATASOURCE_USERNAME:storefront_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:storefront_password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+outbox:
+  poll-interval: 5000
+
 payment:
   mpesa:
     success-rate: 0.9
-    delay-ms: 2000
+    delay-ms: 500
+    passkey: "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
+    secret: "daraja_hmac_secret_key_2026"
 
 resilience4j:
   circuitbreaker:
@@ -10,6 +38,8 @@ resilience4j:
         registerHealthIndicator: true
         slidingWindowSize: 10
         failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
   retry:
     instances:
       paymentGatewayCb:
@@ -20,3 +50,13 @@ resilience4j:
       paymentGatewayCb:
         timeoutDuration: 5s
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true

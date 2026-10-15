@@ -30,27 +30,29 @@ public class PaymentRefundController {
 
     @PostMapping("/{orderId}/refund")
     public ResponseEntity<Void> refund(@PathVariable UUID orderId, @RequestBody RefundRequest request) {
-        return paymentRepository.findByOrderId(orderId).map(payment -> {
-            if (payment.getStatus() != com.storefront.paymentservice.domain.PaymentStatus.COMPLETED) {
-                return ResponseEntity.badRequest().build();
-            }
-            payment.setStatus(com.storefront.paymentservice.domain.PaymentStatus.REFUNDED);
-            paymentRepository.save(payment);
-            // Emit payment.refunded event
-            try {
-                PaymentRefundedEvent payload = new PaymentRefundedEvent(payment.getOrderId(), payment.getId(), payment.getAmount(), request.getReason());
-                String json = objectMapper.writeValueAsString(new EventEnvelope<>(UUID.randomUUID(), payment.getOrderId(), Instant.now(), "payment.refunded", payload));
-                OutboxEvent outbox = OutboxEvent.builder()
-                        .aggregateId(payment.getOrderId())
-                        .topic("payment.refunded")
-                        .payload(json)
-                        .build();
-                outboxEventRepository.save(outbox);
-            } catch (Exception e) {
-                // log error (omitted for brevity)
-            }
-            return ResponseEntity.ok().build();
-        }).orElseGet(() -> ResponseEntity.notFound().build());
+        java.util.Optional<Payment> optPayment = paymentRepository.findByOrderId(orderId);
+        if (optPayment.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Payment payment = optPayment.get();
+        if (payment.getStatus() != com.storefront.paymentservice.domain.PaymentStatus.COMPLETED) {
+            return ResponseEntity.badRequest().build();
+        }
+        payment.setStatus(com.storefront.paymentservice.domain.PaymentStatus.REFUNDED);
+        paymentRepository.save(payment);
+        try {
+            PaymentRefundedEvent payload = new PaymentRefundedEvent(payment.getOrderId(), payment.getId(), payment.getAmount(), request.getReason());
+            String json = objectMapper.writeValueAsString(new EventEnvelope<>(UUID.randomUUID(), payment.getOrderId(), Instant.now(), "payment.refunded", payload));
+            OutboxEvent outbox = OutboxEvent.builder()
+                    .aggregateId(payment.getOrderId())
+                    .topic("payment.refunded")
+                    .payload(json)
+                    .build();
+            outboxEventRepository.save(outbox);
+        } catch (Exception e) {
+            // log error (omitted for brevity)
+        }
+        return ResponseEntity.ok().build();
     }
 
     @Data
