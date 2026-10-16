@@ -33,5 +33,6 @@ public class DltEvent {
 
     private String error;
 
+    @Builder.Default
     private Instant createdAt = Instant.now();
 }

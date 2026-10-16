@@ -32,6 +32,7 @@ public class Order {
     @Column(name = "total", nullable = false)
     private BigDecimal total;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

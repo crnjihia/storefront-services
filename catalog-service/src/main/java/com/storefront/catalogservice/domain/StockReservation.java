@@ -38,6 +38,7 @@ public class StockReservation {
     @Column(nullable = false)
     private StockReservationStatus status;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

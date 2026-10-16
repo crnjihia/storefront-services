@@ -42,6 +42,7 @@ public class Notification {
     @Column(nullable = false)
     private NotificationStatus status;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

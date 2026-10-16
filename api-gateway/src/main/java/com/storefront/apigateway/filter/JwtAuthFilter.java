@@ -6,14 +6,14 @@ import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -26,21 +26,22 @@ import reactor.core.publisher.Mono;
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class JwtAuthFilter implements WebFilter, Ordered {
 
-    // Secret injected from configuration (e.g., application.yml)
-    @org.springframework.beans.factory.annotation.Value("${jwt.secret}")
-    private String secret;
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/api/auth",
             "/api/payments/mpesa/callback"
     );
 
+    private final String secret;
+
+    public JwtAuthFilter(@Value("${jwt.secret}") String secret) {
+        this.secret = secret;
+    }
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-        String path = request.getURI().getPath();
         // Public path checks
         if (isPublic(request)) {
             return chain.filter(exchange);
@@ -77,7 +78,7 @@ public class JwtAuthFilter implements WebFilter, Ordered {
             return true;
         }
         // GET products is public
-        if ("GET".equalsIgnoreCase(request.getMethod().name()) && path.startsWith("/api/products/")) {
+        if (HttpMethod.GET.equals(request.getMethod()) && path.startsWith("/api/products/")) {
             return true;
         }
         // specific callback path is public

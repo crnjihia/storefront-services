@@ -21,6 +21,7 @@ public class ProcessedEvent {
     @EmbeddedId
     private ProcessedEventId id;
 
+    @Builder.Default
     @Column(name = "processed_at", nullable = false, updatable = false)
     private Instant processedAt = Instant.now();
 }

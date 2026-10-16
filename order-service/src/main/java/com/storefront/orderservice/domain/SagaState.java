@@ -29,6 +29,7 @@ public class SagaState {
     @Column(nullable = false)
     private String status; // e.g., IN_PROGRESS, SUCCESS, FAILED
 
+    @Builder.Default
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 

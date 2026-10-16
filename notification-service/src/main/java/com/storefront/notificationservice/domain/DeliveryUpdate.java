@@ -38,6 +38,7 @@ public class DeliveryUpdate {
     @Column(nullable = false)
     private String note;
 
+    @Builder.Default
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt = Instant.now();
 }

@@ -104,20 +104,6 @@
         </repository>
     </distributionManagement>
 
-    <repositories>
-        <repository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
-        </repository>
-        <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/crnjihia/storefront-services</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
     </build>

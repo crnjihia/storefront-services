@@ -49,6 +49,7 @@ public class Payment {
     @Column(name = "failure_reason")
     private String failureReason;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

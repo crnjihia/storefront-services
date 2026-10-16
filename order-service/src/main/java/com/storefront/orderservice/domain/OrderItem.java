@@ -35,6 +35,7 @@ public class OrderItem {
     @Column(name = "price", nullable = false)
     private BigDecimal price;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }
