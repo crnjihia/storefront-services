@@ -38,7 +38,7 @@ class CatalogSagaIntegrationTest {
     static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:latest"));
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:15-alpine"))
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
             .withDatabaseName("catalogdb")
             .withUsername("test")
             .withPassword("test");
@@ -86,6 +86,7 @@ class CatalogSagaIntegrationTest {
     void testHappyPathReservationAndConfirmation() throws Exception {
         UUID productId = UUID.randomUUID();
         Stock stock = Stock.builder()
+                .id(UUID.randomUUID())
                 .productId(productId)
                 .available(10)
                 .reserved(0)
@@ -131,6 +132,7 @@ class CatalogSagaIntegrationTest {
     void testReservationFailsWhenInsufficientStock() throws Exception {
         UUID productId = UUID.randomUUID();
         Stock stock = Stock.builder()
+                .id(UUID.randomUUID())
                 .productId(productId)
                 .available(5)
                 .reserved(0)
@@ -163,6 +165,7 @@ class CatalogSagaIntegrationTest {
     void testCompensationReleaseOnPaymentFailed() throws Exception {
         UUID productId = UUID.randomUUID();
         Stock stock = Stock.builder()
+                .id(UUID.randomUUID())
                 .productId(productId)
                 .available(10)
                 .reserved(0)
