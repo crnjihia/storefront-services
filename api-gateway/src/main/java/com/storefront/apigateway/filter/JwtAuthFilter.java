@@ -30,7 +30,10 @@ public class JwtAuthFilter implements WebFilter, Ordered {
 
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/api/auth",
-            "/api/payments/mpesa/callback"
+            "/api/payments/mpesa/callback",
+            "/actuator",
+            "/v3/api-docs",
+            "/swagger-ui"
     );
 
     private final String secret;
@@ -74,11 +77,11 @@ public class JwtAuthFilter implements WebFilter, Ordered {
     private boolean isPublic(ServerHttpRequest request) {
         String path = request.getURI().getPath();
         // match prefix for auth
-        if (path.startsWith("/api/auth/")) {
+        if (path.startsWith("/api/auth")) {
             return true;
         }
         // GET products is public
-        if (HttpMethod.GET.equals(request.getMethod()) && path.startsWith("/api/products/")) {
+        if (HttpMethod.GET.equals(request.getMethod()) && path.startsWith("/api/products")) {
             return true;
         }
         // specific callback path is public

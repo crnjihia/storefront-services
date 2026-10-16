@@ -2,9 +2,9 @@ package com.storefront.catalogservice.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -13,20 +13,24 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "stock")
+@Table(name = "stocks")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Stock {
+
     @Id
-    @Column(name = "product_id")
+    @GeneratedValue
+    private UUID id;
+
+    @Column(name = "product_id", nullable = false, unique = true)
     private UUID productId;
 
-    @Column(nullable = false)
+    @Column(name = "available_quantity", nullable = false)
     private Integer available;
 
-    @Column(nullable = false)
+    @Column(name = "reserved_quantity", nullable = false)
     private Integer reserved;
 
     @Builder.Default

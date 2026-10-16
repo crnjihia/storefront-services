@@ -25,14 +25,26 @@ public class DltEvent {
     @GeneratedValue
     private UUID id;
 
+    @Column(name = "topic", nullable = false)
     private String topic;
 
+    @Column(name = "partition_index")
+    private Integer partitionIndex;
+
+    @Column(name = "offset_index")
+    private Long offsetIndex;
+
+    @Column(name = "message_key")
+    private String messageKey;
+
     @Lob
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
 
+    @Column(name = "exception_message", columnDefinition = "TEXT")
     private String error;
 
     @Builder.Default
+    @Column(name = "received_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }
