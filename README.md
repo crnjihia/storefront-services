@@ -6,9 +6,12 @@
 [![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-KRaft%20Mode-231F20.svg?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D.svg?logo=redis&logoColor=white)](https://redis.io/)
+[![CI Pipeline](https://github.com/crnjihia/storefront-services/actions/workflows/ci.yml/badge.svg)](https://github.com/crnjihia/storefront-services/actions/workflows/ci.yml)
+[![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-blueviolet.svg?logo=openapiinitiative&logoColor=white)](https://crnjihia.github.io/storefront-services/)
+[![Release](https://img.shields.io/github/v/release/crnjihia/storefront-services?color=blue&logo=github)](https://github.com/crnjihia/storefront-services/releases)
+[![Packages](https://img.shields.io/badge/Packages-GitHub%20Registry-blue?logo=github)](https://github.com/crnjihia/storefront-services/packages)
 [![ArchUnit](https://img.shields.io/badge/ArchUnit-1.3.0-orange.svg)](https://www.archunit.org/)
 [![Testcontainers](https://img.shields.io/badge/Testcontainers-1.19.8-008080.svg?logo=docker&logoColor=white)](https://www.testcontainers.org/)
-[![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-blueviolet.svg?logo=openapiinitiative&logoColor=white)](https://crnjihia.github.io/storefront-services/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Production-grade distributed e-commerce backend modelled on Jumia's architecture for the Kenyan market. Composed of five independent Spring Boot microservices communicating via Apache Kafka event bus, orchestrated by a Saga checkout coordinator, guarded by Spring Cloud Gateway with Resilience4j circuit breaking, and anchored by the Transactional Outbox pattern.**
@@ -246,6 +249,19 @@ graph LR
     EH -->|Unrecoverable Failure| DeadLetterTopics
 ```
 
+### 3.1 Live Event Bus Topology Dashboard (UI for Apache Kafka)
+
+The entire cluster runs on Apache Kafka in KRaft mode, monitored in real time via Kafka UI at `http://localhost:8090`. The dashboard demonstrates the live 18 distributed event topics and Dead Letter Queues configured with 3 partitions and replication:
+
+<p align="center">
+  <img src="docs/images/kafka-topics-dashboard.png" alt="Kafka Topics Dashboard & Dead Letter Queues" width="950" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+</p>
+
+*Key Architectural Highlights:*
+- **Zero Event Loss Isolation:** Every primary command/event stream (`order.created`, `payment.completed`, `stock.reserved`) has a dedicated `.DLT` counterpart for poisoned-message isolation.
+- **Deduplication Anchor:** Consumer microservices record processed event UUIDs in PostgreSQL `processed_events` within the local ACID transaction before triggering side effects.
+- **Idempotent Retries:** Governed by Spring Kafka `DefaultErrorHandler` with backoff before dead-letter routing.
+
 ---
 
 ## 4. Enterprise Non-Negotiables & Correctness Guarantees
@@ -395,22 +411,32 @@ cd storefront-services
 # Copy default environment variables
 cp .env.example .env
 
-# Launch all 5 databases, Redis, Kafka, and the 5 Spring Boot microservices
+# Launch the entire distributed stack
 docker compose up -d --build
 ```
 
+#### Service & Dashboard Access Points
+| Component | Exposed Port | Health / Verification URL | Description |
+| :--- | :--- | :--- | :--- |
+| **API Gateway** | `8080` | `http://localhost:8080/actuator/health` | Edge ingress with Resilience4j circuit breakers |
+| **OpenAPI Docs** | `8080` | `http://localhost:8080/v3/api-docs` | Interactive OpenAPI 3.0.1 specification |
+| **Kafka UI** | `8090` | `http://localhost:8090` | Real-time topic, partition, and consumer inspection |
+| **PostgreSQL 16** | `5432` | `localhost:5432` | 5 isolated relational stores (`user_db`, `catalog_db`, etc.) |
+| **Apache Kafka** | `9092` | `localhost:9092` | Dual-listener KRaft broker with DLT queues |
+| **Redis 7** | `6379` | `localhost:6379` | High-throughput distributed rate limiting & token cache |
+
 ### 9.2 Execute Verification Test Suite
 ```bash
-# Run unit, ArchUnit, and integration tests
+# Run unit, ArchUnit, and contract tests
 ./mvnw clean test
 
-# Run full verification with Testcontainers
+# Run full verification with Testcontainers (real Postgres 16 & Kafka KRaft)
 ./mvnw clean verify
 ```
 
 ### 9.3 Place an Order via API Gateway
 ```bash
-curl -X POST http://localhost:8080/api/v1/orders \
+curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 11111111-2222-3333-4444-555555555555" \
   -d '{
@@ -418,9 +444,9 @@ curl -X POST http://localhost:8080/api/v1/orders \
     "customerPhone": "254712345678",
     "items": [
       {
-        "productId": "33333333-3333-3333-3333-333333333331",
+        "productId": "c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f",
         "quantity": 1,
-        "unitPrice": 44999.00
+        "unitPrice": 2500.00
       }
     ]
   }'
@@ -432,8 +458,8 @@ curl -X POST http://localhost:8080/api/v1/orders \
 
 ```
 storefront-services/
-├── settings.gradle.kts (or pom.xml)
-├── docker-compose.yml              # 5x Postgres, Kafka KRaft, Redis, Gateway
+├── pom.xml                         # Multi-module Maven parent POM
+├── docker-compose.yml              # 5x Postgres, Kafka KRaft, Redis, Kafka UI, Gateway
 ├── common-events/                  # Shared Kafka DTOs, EventEnvelope, CorrelationIdFilter
 ├── api-gateway/                    # Spring Cloud Gateway + Resilience4j + MDC Filter
 ├── user-service/                   # User profiles & auth (Flyway + Postgres)
@@ -446,6 +472,8 @@ storefront-services/
 │   ├── OrderCheckoutSimulation.java # Gatling Java simulation
 │   └── README.md                   # Performance methodology & results
 ├── docs/
+│   ├── images/
+│   │   └── kafka-topics-dashboard.png # Live Kafka UI event stream screenshot
 │   ├── adr/
 │   │   ├── 0001-why-kafka-over-rabbitmq.md
 │   │   ├── 0002-saga-orchestration-vs-choreography.md
@@ -456,7 +484,8 @@ storefront-services/
 │   │   ├── saga-sequence.mmd
 │   │   └── kafka-topology.mmd
 │   ├── kafka-topology.md           # Retry & DLT architecture guide
-│   └── openapi.yaml                # Committed OpenAPI 3 specification
+│   ├── openapi.yaml                # Committed OpenAPI 3 specification
+│   └── index.html                  # Interactive Redoc / GitHub Pages API portal
 └── README.md
 ```
 
